@@ -1,0 +1,3 @@
+2026-02-21T11:43:56Z : watcher started — monitoring /mnt/e/AI_Employ_Vault/Bronce-tiar/Needs_Action
+2026-02-21T11:43:57Z : mode — polling (2s interval, inotifywait not found)
+2026-02-21T11:44:13Z : new file detected — test-watcher-probe.md
