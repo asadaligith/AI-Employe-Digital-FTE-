@@ -1,3 +1,5 @@
-2026-02-21T11:43:56Z : watcher started — monitoring /mnt/e/AI_Employ_Vault/Bronce-tiar/Needs_Action
-2026-02-21T11:43:57Z : mode — polling (2s interval, inotifywait not found)
-2026-02-21T11:44:13Z : new file detected — test-watcher-probe.md
+2026-02-22T13:24:55Z : watcher stopped (keyboard interrupt)
+2026-02-22T13:26:16Z : watcher started — monitoring Inbox/
+2026-02-22T13:26:16Z : mode — polling (2s interval)
+2026-02-22T13:26:16Z : registry loaded — 0 file(s) already processed
+2026-02-22T13:26:18Z : watcher stopped (keyboard interrupt)

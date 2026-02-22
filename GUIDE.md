@@ -41,11 +41,11 @@ AI_Employ_Vault/Bronce-tiar/
 ├── Company_Handbook.md     # Policy rules the agent must obey
 ├── GUIDE.md                # This file
 │
-├── Inbox/                  # Raw external inputs (future use)
+├── Inbox/                  # Raw external inputs — watcher monitors this
 ├── Needs_Action/           # Active tasks waiting to be processed
 ├── Done/                   # Completed tasks (permanent archive)
 │
-├── watcher.sh              # Filesystem watcher — detects new tasks
+├── watcher.py              # Python perception layer — detects new files in Inbox/
 ├── watcher.log             # Event log from watcher
 ├── backup.sh               # Vault backup utility
 └── Backups/                # Timestamped .tar.gz archives
@@ -54,13 +54,13 @@ AI_Employ_Vault/Bronce-tiar/
 ### Lifecycle Flow
 
 ```
-External Input ──► Needs_Action/ ──► Agent Processes ──► Done/
-                        │                    │
-                        │                    ├── Updates Dashboard.md
-                        │                    └── Marks checklist complete
-                        │
-                  watcher.sh detects file arrival
-                  and logs to watcher.log
+External Input ──► Inbox/ ──► watcher.py detects ──► Needs_Action/ ──► Agent Processes ──► Done/
+                                    │                       │                    │
+                                    │                       │                    ├── Updates Dashboard.md
+                                    │                       │                    └── Marks checklist complete
+                                    │                       │
+                                    └── logs to watcher.log │
+                                                            └── structured TASK_*.md created
 ```
 
 ---
@@ -70,9 +70,8 @@ External Input ──► Needs_Action/ ──► Agent Processes ──► Done/
 ### Prerequisites
 
 - **OS:** Linux or WSL2 (Windows Subsystem for Linux)
-- **Shell:** Bash 4.0+
+- **Python:** 3.6+ (standard library only)
 - **AI Backend:** Claude Code CLI (or any LLM agent that can read/write files)
-- **Optional:** [inotify-tools](https://github.com/inotify-tools/inotify-tools) for event-driven file watching
 - **Optional:** [Obsidian](https://obsidian.md) to visualize the vault
 
 ### Step 1 — Create the Vault Directory
@@ -131,10 +130,10 @@ mkdir -p Inbox Needs_Action Done Backups
 - No task may be skipped.
 ```
 
-### Step 5 — Make Utility Scripts Executable
+### Step 5 — Start the Watcher
 
 ```bash
-chmod +x watcher.sh backup.sh
+python watcher.py
 ```
 
 Your vault is now ready to accept tasks.
@@ -168,7 +167,7 @@ The agent follows a **deterministic execution loop** every time it is activated:
 claude "complete these task if any remaining"
 ```
 
-**Watcher-assisted:** Run `watcher.sh` in the background to detect new files. The watcher logs events but does not trigger the agent automatically (Bronze Tier limitation). You still invoke the agent manually or via a cron job.
+**Watcher-assisted:** Run `watcher.py` to continuously monitor `Inbox/` for new files. When a file is detected, a structured task is created in `Needs_Action/`. The watcher logs events but does not trigger the agent automatically (Bronze Tier limitation). You still invoke the agent manually or via a cron job.
 
 ### What Happens to Completed Tasks?
 
@@ -184,7 +183,9 @@ They are **moved to `Done/`**, never deleted. Each completed task retains:
 
 ### Dropping a Task
 
-Create a markdown file in `Needs_Action/` following the required schema:
+Drop any file into `Inbox/`. The watcher will detect it and create a structured task in `Needs_Action/`.
+
+You can also create a task directly in `Needs_Action/` following the required schema:
 
 ```bash
 cat > Needs_Action/task-004-my-task.md << 'EOF'
@@ -209,17 +210,6 @@ Define the concrete deliverable or success condition.
 EOF
 ```
 
-### Naming Convention
-
-```
-task-<NNN>-<short-description>.md
-```
-
-Examples:
-- `task-004-api-endpoint.md`
-- `task-005-fix-login-bug.md`
-- `task-006-write-unit-tests.md`
-
 ### Running the Agent
 
 ```bash
@@ -235,8 +225,11 @@ The agent will process all pending tasks and stop when `Needs_Action/` is empty.
 ### Running the Watcher
 
 ```bash
-# Start in background
-./watcher.sh &
+# Start the watcher (foreground)
+python watcher.py
+
+# Or run in background
+python watcher.py &
 
 # Check the log
 tail -f watcher.log
@@ -245,7 +238,7 @@ tail -f watcher.log
 kill %1
 ```
 
-The watcher monitors `Needs_Action/` and logs every new `.md` file to `watcher.log`. It uses `inotifywait` if available, otherwise falls back to 2-second polling.
+The watcher monitors `Inbox/` and creates a structured `TASK_*.md` file in `Needs_Action/` for each new file detected. Events are logged to `watcher.log`.
 
 ### Running a Backup
 
@@ -264,11 +257,11 @@ Every file in `Needs_Action/` **must** follow this exact structure or it will be
 
 ```markdown
 ---
-type: <task_type>            # engineering, research, operations, etc.
+type: <task_type>            # engineering, research, operations, file_event, etc.
 priority: low | medium | high
 status: pending
 created: <ISO 8601 timestamp> # e.g. 2026-02-21T12:00:00Z
-source: <origin>              # manual_drop, watcher, cron, api, etc.
+source: <origin>              # manual_drop, watcher.py, cron, api, etc.
 ---
 
 ## Task Description
@@ -374,16 +367,17 @@ A `Done/INDEX.md` file listing all completed tasks with their type, priority, an
 
 ## Utilities
 
-### watcher.sh — Filesystem Watcher
+### watcher.py — Perception Layer (Python)
 
 | Detail         | Value                                          |
 |----------------|------------------------------------------------|
 | Location       | Vault root                                     |
-| Purpose        | Detects new `.md` files in `Needs_Action/`     |
+| Purpose        | Monitors `Inbox/` and creates tasks in `Needs_Action/` |
 | Log file       | `watcher.log`                                  |
-| Primary mode   | `inotifywait` (event-driven, near-instant)     |
-| Fallback mode  | Polling every 2 seconds                        |
-| Install dep    | `sudo apt install inotify-tools` (optional)    |
+| Mode           | Polling every 2 seconds                        |
+| Registry       | `.watcher_registry.json` (duplicate prevention)|
+| Dependencies   | Python 3.6+ standard library only              |
+| Start command  | `python watcher.py`                            |
 
 ### backup.sh — Vault Backup
 
@@ -399,11 +393,11 @@ A `Done/INDEX.md` file listing all completed tasks with their type, priority, an
 
 ## Core Files Reference
 
-| File                  | Role                  | Updated By   | When                          |
-|-----------------------|-----------------------|--------------|-------------------------------|
-| `Dashboard.md`        | System state          | Agent        | After every task processed    |
-| `Company_Handbook.md` | Policy rules          | Human        | When policies change          |
-| `watcher.log`         | File detection events | `watcher.sh` | When new files are detected  |
+| File                  | Role                  | Updated By    | When                          |
+|-----------------------|-----------------------|---------------|-------------------------------|
+| `Dashboard.md`        | System state          | Agent         | After every task processed    |
+| `Company_Handbook.md` | Policy rules          | Human         | When policies change          |
+| `watcher.log`         | File detection events | `watcher.py`  | When new files are detected   |
 
 ---
 
@@ -416,9 +410,10 @@ A `Done/INDEX.md` file listing all completed tasks with their type, priority, an
 - Check `Dashboard.md` Alerts section for rejection messages
 
 ### Watcher is not detecting files
-- Confirm `watcher.sh` is running: `ps aux | grep watcher`
+- Confirm `watcher.py` is running: `ps aux | grep watcher.py`
 - Check `watcher.log` for startup messages
-- Ensure the file has a `.md` extension (non-markdown files are ignored)
+- Files must be placed in `Inbox/` (not `Needs_Action/`)
+- Hidden files (starting with `.`) are ignored
 - If using polling mode, wait at least 3 seconds after dropping the file
 
 ### Backup is empty or fails
@@ -435,14 +430,17 @@ A `Done/INDEX.md` file listing all completed tasks with their type, priority, an
 ## Quick Reference Cheat Sheet
 
 ```bash
-# Drop a task
+# Drop a file for the watcher to pick up
+cp my-input.md Inbox/
+
+# Or drop a task directly
 cp my-task.md Needs_Action/
+
+# Start the watcher
+python watcher.py
 
 # Run the agent
 claude "complete these task if any remaining"
-
-# Start the watcher
-./watcher.sh &
 
 # Check watcher events
 tail -f watcher.log
