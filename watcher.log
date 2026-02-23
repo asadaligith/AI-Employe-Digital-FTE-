@@ -3,3 +3,8 @@
 2026-02-22T13:26:16Z : mode — polling (2s interval)
 2026-02-22T13:26:16Z : registry loaded — 0 file(s) already processed
 2026-02-22T13:26:18Z : watcher stopped (keyboard interrupt)
+2026-02-23T11:55:24Z : watcher started — monitoring Inbox/
+2026-02-23T11:55:24Z : mode — polling (2s interval)
+2026-02-23T11:55:24Z : registry loaded — 0 file(s) already processed
+2026-02-23T11:56:00Z : new file detected — task-1.md → task created: TASK_20260223_115600.md
+2026-02-23T11:57:44Z : task completed — moved Inbox/task-1.md → Done/task-1.md
