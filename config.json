@@ -1,0 +1,31 @@
+{
+  "gmail": {
+    "imap_server": "imap.gmail.com",
+    "imap_port": 993,
+    "email": "",
+    "app_password": "",
+    "check_folder": "INBOX",
+    "max_emails_per_poll": 5,
+    "mark_as_read": false
+  },
+  "smtp": {
+    "server": "smtp.gmail.com",
+    "port": 587,
+    "email": "",
+    "app_password": "",
+    "from_name": "AI Employee"
+  },
+  "linkedin": {
+    "enabled": false,
+    "note": "LinkedIn automation uses draft files in Pending_Approval/ — no API credentials needed for draft generation"
+  },
+  "watchers": {
+    "gmail_enabled": true,
+    "filesystem_enabled": true,
+    "poll_interval_seconds": 30
+  },
+  "scheduling": {
+    "daily_run_hour_utc": 8,
+    "timezone": "UTC"
+  }
+}

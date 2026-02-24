@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "vault-email": {
+      "command": "python3",
+      "args": ["mcp_email_server.py"],
+      "cwd": "."
+    }
+  }
+}

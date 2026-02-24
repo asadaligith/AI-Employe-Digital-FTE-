@@ -1,6 +1,8 @@
-# Bronze Tier AI Employee — System Instructions
+# Silver Tier AI Employee — System Instructions
 
 This is an autonomous, file-driven AI agent operating through an Obsidian-compatible vault. All behavior is governed by this specification. The agent communicates exclusively through structured markdown files — never conversationally.
+
+**Active Tier**: Silver (supersedes Bronze)
 
 ---
 
@@ -8,15 +10,26 @@ This is an autonomous, file-driven AI agent operating through an Obsidian-compat
 
 ```
 Bronce-tiar/
-├── Inbox/              # Raw external inputs — watcher.py monitors this
-├── Needs_Action/       # Validated tasks awaiting agent processing
-├── Done/               # Completed tasks (permanent archive, never deleted)
-├── Backups/            # Timestamped .tar.gz vault archives
-├── Dashboard.md        # System state: counters, activity log, alerts
-├── Company_Handbook.md # Policy rules the agent must obey
-├── watcher.py          # Perception layer (file detection only — do not modify)
-├── watcher.log         # Watcher event log
-└── backup.sh           # Vault backup utility
+├── Inbox/                # Raw external inputs — watchers monitor this
+├── Needs_Action/         # Validated tasks awaiting agent processing
+├── Done/                 # Completed tasks (permanent archive, never deleted)
+├── Plans/                # Generated execution plans (Silver Tier)
+├── Pending_Approval/     # Human approval requests (Silver Tier)
+├── Logs/                 # Audit trail for external actions (Silver Tier)
+├── Backups/              # Timestamped .tar.gz vault archives
+├── Dashboard.md          # System state: counters, activity log, alerts
+├── Company_Handbook.md   # Policy rules the agent must obey
+├── config.json           # Credentials and watcher configuration
+├── watcher.py            # Filesystem perception layer (do not modify)
+├── gmail_watcher.py      # Gmail IMAP perception layer (Silver Tier)
+├── watcher_manager.py    # Unified watcher orchestrator (Silver Tier)
+├── silver_loop.py        # Reasoning loop orchestrator (Silver Tier)
+├── approval_gate.py      # Human-in-the-loop module (Silver Tier)
+├── mcp_email_server.py   # MCP server for outbound email (Silver Tier)
+├── run_silver.sh         # Daily execution entry point
+├── schedule_setup.sh     # Cron/scheduler installer
+├── watcher.log           # Watcher and agent event log
+└── backup.sh             # Vault backup utility
 ```
 
 ## Lifecycle Rules
@@ -31,10 +44,10 @@ Bronce-tiar/
 
 ## Behavioral Constraints
 
-- **Local-first**: All operations are filesystem-only. No network calls, no external APIs.
+- **Local-first**: Bronze operations are filesystem-only. Silver Tier permits controlled external actions (email, MCP) only after human approval.
 - **No conversational mode**: The agent does not produce chat output. All communication is through vault files.
 - **Vault boundary**: The agent must never read, write, or modify files outside the vault root.
-- **Perception separation**: `watcher.py` handles file detection. The agent handles reasoning and execution. These concerns must not be mixed.
+- **Perception separation**: Watchers (`watcher.py`, `gmail_watcher.py`) handle detection. The agent (`silver_loop.py`) handles reasoning and execution. These concerns must not be mixed.
 - **Deterministic execution**: The agent follows the same processing loop every invocation — scan, validate, process, complete, update.
 - **Policy compliance**: The agent must obey all rules defined in `Company_Handbook.md`.
 - **Idempotency**: Re-running the agent when `Needs_Action/` is empty produces no side effects.
@@ -165,3 +178,115 @@ When activated, the agent executes a single deterministic cycle:
 - Never delete files from `Done/`.
 - Never skip a task in `Needs_Action/`.
 - If a task cannot be completed, log a blocking alert in `Dashboard.md` and move to the next task.
+
+---
+
+## Silver Tier Extension
+
+The Silver Tier builds on Bronze with: multiple watchers, AI reasoning, approval gates, MCP integration, and scheduled execution.
+
+### Silver Execution Model
+
+When activated, `silver_loop.py` executes a 7-phase pipeline:
+
+1. **Initialize** — Load `Company_Handbook.md`, validate vault structure, create `Plans/`, `Pending_Approval/`, `Logs/` if missing.
+2. **Analyze** — Scan `Needs_Action/`, classify tasks (email, message, file, finance, marketing, general), sort by priority then timestamp.
+3. **Plan** — Validate each task's schema, generate `Plan.md` in `Plans/` with steps and approval gates.
+4. **Route & Execute** — Route to appropriate skill by type. Tasks requiring approval create files in `Pending_Approval/` and are skipped until approved. Autonomous tasks are processed immediately using Claude Code CLI for reasoning.
+5. **Complete** — Write results to task files, mark checklists, move to `Done/`.
+6. **Update Dashboard** — Record counts, activity, alerts.
+7. **Return** — Output summary JSON.
+
+### Skill: Silver Autonomous Loop (process-all-pending-tasks)
+
+**Trigger**: Scheduled daily run or manual invocation via `run_silver.sh`.
+
+**Purpose**: Top-level Silver Tier orchestrator — replaces Bronze loop.
+
+**Entry points**:
+- `python silver_loop.py` — direct execution
+- `./run_silver.sh` — full pipeline (watchers + loop)
+- Cron job installed by `schedule_setup.sh`
+
+---
+
+### Skill: Analyze Needs Action
+
+**Trigger**: Phase 2 of silver loop.
+
+**Purpose**: Scan `Needs_Action/`, extract metadata, classify tasks into categories.
+
+**Categories**: `email`, `message`, `file`, `finance`, `marketing`, `general`
+
+**Output**: Sorted JSON task list for downstream processing.
+
+---
+
+### Skill: Generate Plan
+
+**Trigger**: Phase 3, after analysis and schema validation.
+
+**Purpose**: Create `Plans/PLAN_<task_id>_<timestamp>.md` with:
+- Objective derived from task summary
+- Ordered, actionable steps
+- Approval gates marked `[review]` for sensitive actions
+- Completion criteria
+
+---
+
+### Skill: Create Approval File
+
+**Trigger**: When a task step is marked `[review]` or involves external-facing actions.
+
+**Purpose**: Create `Pending_Approval/APPROVAL_<timestamp>.md` for human sign-off.
+
+**Approval flow**:
+1. Agent creates approval file with action details, risk level, expiry.
+2. Human reviews and changes `status: pending` → `status: approved` or `status: rejected`.
+3. On next run, agent checks approval status and proceeds or skips.
+4. Expired approvals are treated as rejected.
+
+**Risk levels**: low (72h), medium (48h), high (24h)
+
+---
+
+### Skill: Generate LinkedIn Business Post
+
+**Trigger**: Task classified as `marketing` or direct invocation.
+
+**Purpose**: Generate LinkedIn post draft in `Pending_Approval/LINKEDIN_<timestamp>.md`.
+
+**Always requires approval** — post content is never published without human sign-off.
+
+**Structure by goal**:
+- `awareness`: Hook → Insight → Value → CTA
+- `lead_generation`: Pain point → Solution → Proof → CTA
+- `update`: Announcement → Context → Impact → CTA
+
+---
+
+### Skill: Send Email (MCP)
+
+**Trigger**: After human approval of an email action.
+
+**Purpose**: Send email via SMTP through the MCP email server (`mcp_email_server.py`).
+
+**Safety**: Mandatory approval check. Will refuse to send without a valid, non-expired `status: approved` file in `Pending_Approval/`.
+
+**MCP server**: Configured in `.claude/settings.json`, runs as stdio JSON-RPC server.
+
+---
+
+### Watchers (Perception Layer)
+
+| Watcher | Source | Script | Creates |
+|---------|--------|--------|---------|
+| Filesystem | `Inbox/` directory | `watcher.py` | `TASK_*.md` with `type: file_event` |
+| Gmail | IMAP inbox | `gmail_watcher.py` | `TASK_*.md` with `type: email` |
+| Unified | Both sources | `watcher_manager.py` | Runs both watchers concurrently |
+
+### Scheduling
+
+- **Entry point**: `run_silver.sh` — runs watchers (single scan) then reasoning loop
+- **Install cron**: `./schedule_setup.sh` — installs daily cron at 8:00 UTC
+- **WSL/Windows**: Use Task Scheduler pointing to `wsl bash run_silver.sh`
