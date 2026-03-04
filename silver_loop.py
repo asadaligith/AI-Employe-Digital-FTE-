@@ -55,6 +55,7 @@ from approval_gate import (
     requires_approval, create_approval_file, check_approval,
     mark_approval_executed, list_pending_approvals
 )
+from linkedin_post_generator import generate_linkedin_post, extract_marketing_params
 
 # ---------------------------------------------------------------------------
 # Utilities
@@ -158,6 +159,8 @@ def classify_task(fm: dict, description: str) -> str:
 
     if "email" in ftype or "email" in source or "email" in desc_lower or "inbox" in desc_lower:
         return "email"
+    if "whatsapp" in source or "whatsapp" in ftype or "whatsapp" in desc_lower:
+        return "message"
     if any(kw in ftype for kw in ["message", "chat", "notification", "alert"]):
         return "message"
     if "file" in ftype or source == "watcher.py" or "file detect" in desc_lower:
@@ -488,9 +491,22 @@ def execute_task(task: dict, plan_path: Optional[str], dry_run: bool) -> dict:
                 log(f"{task_id}: approval expired")
                 return {"status": "failed", "details": f"approval expired: {reason}"}
 
-    # Execute: invoke Claude reasoning
+    # Execute: route by task type
     log(f"executing {task_id} ({task_type})...")
-    result_text = invoke_claude_reasoning(task)
+
+    if task_type == "marketing":
+        # LinkedIn post generation via dedicated skill
+        params = extract_marketing_params(task["content"])
+        li_result = generate_linkedin_post(**params)
+        if "error" in li_result:
+            result_text = f"LinkedIn generation failed: {li_result['error']}"
+        else:
+            result_text = (
+                f"LinkedIn draft generated: {li_result['draft_path']}\n\n"
+                f"{li_result['post_content']}"
+            )
+    else:
+        result_text = invoke_claude_reasoning(task)
 
     # Write result into task file
     fpath = os.path.join(NEEDS_ACTION_DIR, filename)

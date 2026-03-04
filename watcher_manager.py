@@ -101,6 +101,33 @@ def run_gmail_watcher(single_run: bool) -> None:
     log("gmail watcher thread stopped")
 
 
+def run_whatsapp_watcher(single_run: bool) -> None:
+    """Run the WhatsApp export watcher in this thread."""
+    sys.path.insert(0, VAULT_DIR)
+    try:
+        import whatsapp_watcher
+    except ImportError:
+        log("ERROR: could not import whatsapp_watcher.py")
+        return
+
+    config = load_config()
+    poll_interval = config.get("watchers", {}).get("poll_interval_seconds", 30)
+
+    log("whatsapp watcher thread started")
+
+    registry = whatsapp_watcher.load_registry()
+    try:
+        while not shutdown_event.is_set():
+            registry = whatsapp_watcher.scan_whatsapp(config, registry)
+            if single_run:
+                break
+            shutdown_event.wait(timeout=poll_interval)
+    except Exception as exc:
+        log(f"whatsapp watcher error: {exc}")
+
+    log("whatsapp watcher thread stopped")
+
+
 def signal_handler(signum, frame):
     log("shutdown signal received")
     shutdown_event.set()
@@ -148,6 +175,19 @@ def main() -> None:
         log("gmail watcher enabled")
     else:
         log("gmail watcher disabled in config")
+
+    # WhatsApp watcher (Inbox/whatsapp/ → Needs_Action/)
+    if watchers_cfg.get("whatsapp_enabled", True):
+        t = threading.Thread(
+            target=run_whatsapp_watcher,
+            args=(single_run,),
+            name="whatsapp-watcher",
+            daemon=True
+        )
+        threads.append(t)
+        log("whatsapp watcher enabled")
+    else:
+        log("whatsapp watcher disabled in config")
 
     if not threads:
         log("no watchers enabled — nothing to do")

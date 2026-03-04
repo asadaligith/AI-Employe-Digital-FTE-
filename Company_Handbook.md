@@ -32,6 +32,12 @@
 - MCP server calls require both approval AND valid configuration.
 - Failed external actions are logged and alerted in Dashboard.md.
 
+## Inbound Message Policy
+- WhatsApp conversations are treated as inbound communication (no approval needed for reading/processing).
+- Exported WhatsApp chats are parsed and converted to tasks automatically.
+- Responding to WhatsApp messages externally requires approval (external-facing action).
+- Sensitive information in WhatsApp messages must not be disclosed outside the vault.
+
 ## Task Handling Policy
 - Tasks must follow the mandatory schema (frontmatter metadata + checklist).
 - Files missing metadata are rejected and logged as alerts.

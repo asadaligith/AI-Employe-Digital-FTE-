@@ -1,0 +1,22 @@
+# Secrets and credentials
+config.json
+
+# Registry files (runtime state)
+.watcher_registry.json
+.gmail_registry.json
+.whatsapp_registry.json
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Runtime logs
+watcher.log
+
+# Backups (large binary archives)
+Backups/*.tar.gz
+
+# OS files
+.DS_Store
+Thumbs.db
