@@ -266,8 +266,34 @@ def validate_task_schema(task: dict) -> list:
     return errors
 
 
+def find_existing_plan(source_file: str) -> Optional[str]:
+    """Check if a plan already exists for a given source task file."""
+    try:
+        for entry in os.listdir(PLANS_DIR):
+            if not entry.endswith(".md"):
+                continue
+            fpath = os.path.join(PLANS_DIR, entry)
+            try:
+                with open(fpath, "r", encoding="utf-8") as fh:
+                    content = fh.read()
+                fm = parse_frontmatter(content)
+                if fm.get("source_file") == source_file:
+                    return f"Plans/{entry}"
+            except OSError:
+                continue
+    except OSError:
+        pass
+    return None
+
+
 def generate_plan(task: dict) -> Optional[str]:
     """Generate a Plan.md file for a task. Returns plan file path or None."""
+    # Check for existing plan to avoid duplicates
+    existing = find_existing_plan(task["filename"])
+    if existing:
+        log(f"reusing existing plan: {existing}")
+        return existing
+
     task_id = task["id"]
     task_type = task["type"]
     summary = task["summary"]
@@ -409,16 +435,18 @@ def invoke_claude_reasoning(task: dict) -> str:
     # Try to invoke Claude Code CLI
     try:
         result = subprocess.run(
-            ["claude", "--print", "-p", prompt],
+            ["claude", "-p", prompt],
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=30,
             cwd=VAULT_DIR,
         )
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()
-    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-        pass
+        else:
+            log(f"Claude CLI returned code {result.returncode}: {result.stderr[:200] if result.stderr else 'no stderr'}")
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
+        log(f"Claude CLI unavailable: {type(exc).__name__}")
 
     # Fallback: structured analysis without Claude CLI
     log("Claude CLI not available — producing structured analysis")
@@ -678,9 +706,12 @@ def update_dashboard(summary: dict) -> None:
     pending_a = summary.get("pending_approval", 0)
     failed = summary.get("failed_tasks", 0)
 
+    skipped = summary.get("skipped_dry_run", 0)
+
     activity = (
         f"- {ts} : Silver Tier run complete — "
-        f"{processed} processed, {pending_a} pending approval, {failed} failed. "
+        f"{processed} processed, {pending_a} pending approval, {failed} failed"
+        f"{f', {skipped} skipped (dry-run)' if skipped else ''}. "
         f"Skill: process-all-pending-tasks.\n"
     )
 
@@ -743,6 +774,7 @@ def run_pipeline(dry_run: bool = False) -> dict:
         "approved_tasks": 0,
         "pending_approval": 0,
         "failed_tasks": 0,
+        "skipped_dry_run": 0,
         "status": "complete",
     }
 
@@ -795,6 +827,8 @@ def run_pipeline(dry_run: bool = False) -> dict:
             completed_tasks.append(task)
         elif status == "pending_approval":
             summary["pending_approval"] += 1
+        elif status == "dry_run":
+            summary["skipped_dry_run"] += 1
         elif status == "failed":
             summary["failed_tasks"] += 1
             dashboard_alert(f"TASK FAILED — {task['filename']}: {result['details']}")
@@ -815,6 +849,8 @@ def run_pipeline(dry_run: bool = False) -> dict:
     print(f"  Processed:        {summary['processed_tasks']}")
     print(f"  Pending Approval: {summary['pending_approval']}")
     print(f"  Failed:           {summary['failed_tasks']}")
+    if summary.get('skipped_dry_run'):
+        print(f"  Skipped (dry-run):{summary['skipped_dry_run']}")
     print(f"  Status:           {summary['status']}")
     print("========================================")
     print("")
