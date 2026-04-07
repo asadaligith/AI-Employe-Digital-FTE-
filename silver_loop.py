@@ -157,7 +157,7 @@ def classify_task(fm: dict, description: str) -> str:
     source = fm.get("source", "").lower()
     desc_lower = description.lower()
 
-    if "email" in ftype or "email" in source or "email" in desc_lower or "inbox" in desc_lower:
+    if "email" in ftype or "email" in source or "email" in desc_lower:
         return "email"
     if "whatsapp" in source or "whatsapp" in ftype or "whatsapp" in desc_lower:
         return "message"
@@ -167,7 +167,7 @@ def classify_task(fm: dict, description: str) -> str:
         return "file"
     if any(kw in ftype or kw in desc_lower for kw in ["finance", "invoice", "payment", "budget"]):
         return "finance"
-    if any(kw in ftype or kw in desc_lower for kw in ["linkedin", "marketing", "social", "post"]):
+    if any(kw in ftype or kw in desc_lower for kw in ["linkedin", "linkdin", "marketing", "social media", "post"]):
         return "marketing"
     return "general"
 
@@ -202,6 +202,22 @@ def phase_analyze() -> list:
         summary = description[:120].replace("\n", " ").strip()
 
         task_type = classify_task(fm, description)
+
+        # For file_event tasks, re-classify using inbox file content
+        if task_type == "file" and fm.get("inbox_file"):
+            inbox_path = os.path.join(INBOX_DIR, fm["inbox_file"])
+            if os.path.isfile(inbox_path):
+                try:
+                    with open(inbox_path, "r", encoding="utf-8", errors="replace") as ifh:
+                        inbox_content = ifh.read(2000)
+                    # Use empty frontmatter so file_event type doesn't dominate
+                    reclassified = classify_task({}, inbox_content)
+                    if reclassified != "general" and reclassified != "file":
+                        log(f"reclassified {fname} from 'file' to '{reclassified}' based on inbox content")
+                        task_type = reclassified
+                except OSError:
+                    pass
+
         priority = fm.get("priority", "low")
         created = fm.get("created", "")
         status = fm.get("status", "")
@@ -416,6 +432,22 @@ def generate_plan(task: dict) -> Optional[str]:
 # Phase 4: Route & Execute
 # ---------------------------------------------------------------------------
 
+def read_inbox_file_content(task: dict) -> str:
+    """For file_event tasks, read the original inbox file to get user intent."""
+    inbox_file = task["frontmatter"].get("inbox_file", "")
+    if not inbox_file:
+        return ""
+    inbox_path = os.path.join(INBOX_DIR, inbox_file)
+    if not os.path.isfile(inbox_path):
+        return ""
+    try:
+        with open(inbox_path, "r", encoding="utf-8", errors="replace") as fh:
+            content = fh.read(5000)
+        return content.strip()
+    except OSError:
+        return ""
+
+
 def invoke_claude_reasoning(task: dict) -> str:
     """Invoke Claude Code CLI to reason through a task and produce a result.
 
@@ -423,6 +455,13 @@ def invoke_claude_reasoning(task: dict) -> str:
     """
     description = extract_section(task["content"], "Task Description")
     outcome = extract_section(task["content"], "Required Outcome")
+
+    # For file_event tasks, enrich with actual inbox file content
+    if task.get("type") == "file":
+        inbox_content = read_inbox_file_content(task)
+        if inbox_content:
+            description += f"\n\n**Original file content**:\n{inbox_content}"
+            outcome += f"\n\nUse the original file content above to understand the user's actual request."
 
     prompt = (
         f"You are processing a task in an AI Employee vault.\n\n"

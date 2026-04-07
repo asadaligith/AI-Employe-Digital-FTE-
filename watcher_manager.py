@@ -102,7 +102,7 @@ def run_gmail_watcher(single_run: bool) -> None:
 
 
 def run_whatsapp_watcher(single_run: bool) -> None:
-    """Run the WhatsApp export watcher in this thread."""
+    """Run the WhatsApp Web watcher (Playwright) in this thread."""
     sys.path.insert(0, VAULT_DIR)
     try:
         import whatsapp_watcher
@@ -110,20 +110,39 @@ def run_whatsapp_watcher(single_run: bool) -> None:
         log("ERROR: could not import whatsapp_watcher.py")
         return
 
+    # Check Playwright availability
+    if not whatsapp_watcher.PLAYWRIGHT_AVAILABLE:
+        log("ERROR: playwright not installed — WhatsApp watcher disabled. "
+            "Run: pip install playwright && playwright install chromium")
+        return
+
     config = load_config()
     poll_interval = config.get("watchers", {}).get("poll_interval_seconds", 30)
 
-    log("whatsapp watcher thread started")
+    log("whatsapp watcher thread started (Playwright/WhatsApp Web)")
 
     registry = whatsapp_watcher.load_registry()
+    consecutive_failures = 0
+    max_consecutive_failures = 3
+
     try:
         while not shutdown_event.is_set():
-            registry = whatsapp_watcher.scan_whatsapp(config, registry)
+            try:
+                registry = whatsapp_watcher.scan_whatsapp(config, registry)
+                consecutive_failures = 0  # Reset on success
+            except Exception as exc:
+                consecutive_failures += 1
+                log(f"whatsapp watcher error ({consecutive_failures}/{max_consecutive_failures}): {exc}")
+                if consecutive_failures >= max_consecutive_failures:
+                    log("whatsapp watcher: circuit breaker triggered — too many consecutive failures. "
+                        "Check session with: python whatsapp_watcher.py --setup")
+                    break
+
             if single_run:
                 break
             shutdown_event.wait(timeout=poll_interval)
     except Exception as exc:
-        log(f"whatsapp watcher error: {exc}")
+        log(f"whatsapp watcher fatal error: {exc}")
 
     log("whatsapp watcher thread stopped")
 

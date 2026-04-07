@@ -26,7 +26,7 @@ Bronce-tiar/
 ├── watcher_manager.py    # Unified watcher orchestrator (Silver Tier)
 ├── silver_loop.py        # Reasoning loop orchestrator (Silver Tier)
 ├── approval_gate.py      # Human-in-the-loop module (Silver Tier)
-├── whatsapp_watcher.py   # WhatsApp export perception layer (Silver Tier)
+├── whatsapp_watcher.py   # WhatsApp Web perception layer via Playwright (Silver Tier)
 ├── linkedin_post_generator.py # LinkedIn post draft generator (Silver Tier)
 ├── mcp_email_server.py   # MCP server for outbound email (Silver Tier)
 ├── run_silver.sh         # Daily execution entry point
@@ -286,7 +286,7 @@ When activated, `silver_loop.py` executes a 7-phase pipeline:
 |---------|--------|--------|---------|
 | Filesystem | `Inbox/` directory | `watcher.py` | `TASK_*.md` with `type: file_event` |
 | Gmail | IMAP inbox | `gmail_watcher.py` | `TASK_*.md` with `type: email` |
-| WhatsApp | `Inbox/whatsapp/` exports | `whatsapp_watcher.py` | `TASK_WA_*.md` with `type: message` |
+| WhatsApp | WhatsApp Web (Playwright) | `whatsapp_watcher.py` | `TASK_WA_*.md` with `type: message` |
 | Unified | All sources | `watcher_manager.py` | Runs all watchers concurrently |
 
 ### Scheduling
