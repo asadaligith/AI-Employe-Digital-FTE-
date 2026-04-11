@@ -1,8 +1,8 @@
-# Silver Tier AI Employee — System Instructions
+# Gold Tier AI Employee — System Instructions
 
 This is an autonomous, file-driven AI agent operating through an Obsidian-compatible vault. All behavior is governed by this specification. The agent communicates exclusively through structured markdown files — never conversationally.
 
-**Active Tier**: Silver (supersedes Bronze)
+**Active Tier**: Gold (supersedes Silver)
 
 ---
 
@@ -29,7 +29,20 @@ Bronce-tiar/
 ├── whatsapp_watcher.py   # WhatsApp Web perception layer via Playwright (Silver Tier)
 ├── linkedin_post_generator.py # LinkedIn post draft generator (Silver Tier)
 ├── mcp_email_server.py   # MCP server for outbound email (Silver Tier)
-├── run_silver.sh         # Daily execution entry point
+├── gold_loop.py          # Continuous autonomous loop orchestrator (Gold Tier)
+├── error_handler.py      # Retry engine with backoff + fallback (Gold Tier)
+├── action_logger.py      # Structured action logging system (Gold Tier)
+├── odoo_client.py        # Odoo JSON-RPC client (Gold Tier)
+├── social_media_manager.py # FB/IG/Twitter draft generator + API (Gold Tier)
+├── mcp_odoo_server.py    # MCP JSON-RPC server for Odoo (Gold Tier)
+├── mcp_social_server.py  # MCP JSON-RPC server for social media (Gold Tier)
+├── ceo_report_generator.py # Weekly CEO briefing generator (Gold Tier)
+├── business_audit.py     # Weekly efficiency audit (Gold Tier)
+├── In_Progress/          # Tasks being actively worked on (Gold Tier)
+├── Reports/              # Weekly CEO briefings & audits (Gold Tier)
+├── Approved/             # Executed approval archive (Gold Tier)
+├── run_gold.sh           # Gold tier entry point script
+├── run_silver.sh         # Silver tier entry point (legacy)
 ├── schedule_setup.sh     # Cron/scheduler installer
 ├── watcher.log           # Watcher and agent event log
 └── backup.sh             # Vault backup utility
@@ -294,3 +307,93 @@ When activated, `silver_loop.py` executes a 7-phase pipeline:
 - **Entry point**: `run_silver.sh` — runs watchers (single scan) then reasoning loop
 - **Install cron**: `./schedule_setup.sh` — installs daily cron at 8:00 UTC
 - **WSL/Windows**: Use Task Scheduler pointing to `wsl bash run_silver.sh`
+
+---
+
+## Gold Tier Extension
+
+The Gold Tier builds on Silver with: continuous autonomous loop, retry/error handling, In_Progress tracking, Odoo ERP integration, social media management, CEO reports, and business audits.
+
+### Gold Execution Model
+
+When activated, `gold_loop.py` executes a continuous 10-phase pipeline:
+
+1. **Initialize** — Call Silver init, ensure Gold dirs (In_Progress/, Reports/, Approved/)
+2. **Run Watchers** — Subprocess `watcher_manager.py --once` for perception scan
+3. **Analyze** — Reuse Silver's `phase_analyze()` to scan and classify tasks
+4. **Plan** — Validate schemas, generate plans (reuse Silver functions)
+5. **Track** — Move task files from Needs_Action/ to In_Progress/ before execution
+6. **Execute** — For each In_Progress task: execute with retry wrapper. On success → Done/. On max-retries-exceeded → back to Needs_Action/ with alert.
+7. **Verify** — Post-execution verification: result section exists, status completed, file in Done/
+8. **Report Check** — If weekly report/audit is due, generate automatically
+9. **Update Dashboard** — Enhanced dashboard with Gold Tier metrics (in-progress count, retries, verifications)
+10. **Sleep or Exit** — If `--once`: exit. Otherwise: sleep for `cycle_interval_seconds` (default 300s), then repeat.
+
+### New Directories
+
+| Directory | Purpose |
+|-----------|---------|
+| `In_Progress/` | Tasks currently being executed — moved here from Needs_Action/ before processing |
+| `Reports/` | Weekly CEO briefings and business audit reports |
+| `Approved/` | Archive of executed approval files |
+
+### Skill: Gold Autonomous Loop
+
+**Trigger**: `./run_gold.sh` or `python gold_loop.py`
+
+**CLI**:
+- `python gold_loop.py` — continuous mode (default, 5-min cycles)
+- `python gold_loop.py --once` — single cycle then exit
+- `python gold_loop.py --dry-run` — analyze only
+
+**Signal handling**: SIGINT/SIGTERM triggers graceful shutdown after current cycle.
+
+### Skill: CEO Weekly Report
+
+**Trigger**: Scheduled (configurable) or `python ceo_report_generator.py`
+
+**Output**: `Reports/CEO_REPORT_WEEK_YYYY-MM-DD.md`
+
+**Sections**: Executive Summary, Task Performance, Communication Activity, Financial Overview (if Odoo), Social Media, Issues & Alerts, Recommendations.
+
+### Skill: Business Audit
+
+**Trigger**: Scheduled (configurable) or `python business_audit.py`
+
+**Output**: `Reports/AUDIT_WEEK_YYYY-MM-DD.md`
+
+**Sections**: Efficiency Scores (A-D), Task Throughput, Approval Pipeline, Error Analysis, Watcher Health, Optimization Suggestions.
+
+### Retry Engine (`error_handler.py`)
+
+- Exponential backoff: `delay = min(base_delay * backoff_factor^attempt, max_delay)`
+- State persisted in `.gold_retry_state.json` across cycles
+- Default: 3 attempts, 5s base delay, 300s max delay
+- Max-retries-exceeded tasks marked `status: blocked` with dashboard alert
+
+### Action Logger (`action_logger.py`)
+
+- All Gold Tier actions logged to `Logs/actions.jsonl` (structured JSON lines)
+- Significant actions also get `Logs/ACTION_*.md` human-readable files
+- Supports querying by time range and aggregation for reports
+
+### Odoo Integration
+
+**Client**: `odoo_client.py` — JSON-RPC client for Odoo ERP (stdlib only)
+**MCP Server**: `mcp_odoo_server.py` — exposes `odoo_get_invoices`, `odoo_get_payments`, `odoo_get_contacts`, `odoo_create_invoice`, `odoo_financial_summary`
+
+Write operations (invoice creation) require human approval.
+
+### Social Media Integration
+
+**Manager**: `social_media_manager.py` — draft generation + API posting for Facebook, Instagram, Twitter/X
+**MCP Server**: `mcp_social_server.py` — exposes `social_generate_draft`, `social_post`, `social_list_drafts`
+
+All posts require human approval. API posting is optional — works in draft-only mode without credentials.
+
+### Gold Scheduling
+
+- **Entry point**: `./run_gold.sh` — continuous loop (default) or single-cycle modes
+- **CEO Report**: Configurable via `gold.report_day` / `gold.report_hour_utc` in config.json
+- **Business Audit**: Configurable via `gold.audit_day` / `gold.audit_hour_utc` in config.json
+- **WSL/Windows**: Use Task Scheduler pointing to `wsl bash run_gold.sh`

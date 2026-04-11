@@ -37,6 +37,13 @@ APPROVAL_REQUIRED_ACTIONS = {
     "financial_transaction",
     "delete_external",
     "external_api_call",
+    # Gold Tier additions:
+    "odoo_transaction",
+    "odoo_create_invoice",
+    "social_media_post",
+    "facebook_post",
+    "instagram_post",
+    "twitter_post",
 }
 
 

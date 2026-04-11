@@ -4,6 +4,16 @@
       "command": "python3",
       "args": ["mcp_email_server.py"],
       "cwd": "."
+    },
+    "vault-odoo": {
+      "command": "python3",
+      "args": ["mcp_odoo_server.py"],
+      "cwd": "."
+    },
+    "vault-social": {
+      "command": "python3",
+      "args": ["mcp_social_server.py"],
+      "cwd": "."
     }
   }
 }

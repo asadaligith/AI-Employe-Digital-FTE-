@@ -32,5 +32,28 @@
   "scheduling": {
     "daily_run_hour_utc": 8,
     "timezone": "UTC"
+  },
+  "gold": {
+    "enabled": true,
+    "cycle_interval_seconds": 300,
+    "max_retry_attempts": 3,
+    "retry_base_delay_seconds": 5,
+    "report_day": "monday",
+    "report_hour_utc": 7,
+    "audit_day": "friday",
+    "audit_hour_utc": 18
+  },
+  "odoo": {
+    "enabled": false,
+    "url": "https://your-odoo-instance.com",
+    "database": "your-db",
+    "username": "admin",
+    "password": "your-api-key",
+    "timeout": 30
+  },
+  "social_media": {
+    "facebook": {"enabled": false, "page_id": "", "page_access_token": ""},
+    "instagram": {"enabled": false, "business_account_id": "", "access_token": ""},
+    "twitter": {"enabled": false, "api_key": "", "api_secret": "", "access_token": "", "access_secret": ""}
   }
 }
