@@ -67,7 +67,7 @@ AI_Employ_Vault/Bronce-tiar/
 ├── GUIDE.md                  # This file
 │
 ├── Inbox/                    # Raw external inputs
-│   └── whatsapp/             # WhatsApp chat export drop zone
+│   └── whatsapp/             # WhatsApp legacy drop zone (unused with Playwright)
 ├── Needs_Action/             # Active tasks waiting to be processed
 ├── In_Progress/              # Tasks currently being executed (Gold)
 ├── Done/                     # Completed tasks (permanent archive)
@@ -144,9 +144,10 @@ External Input ──► Inbox/ ──► Watchers ──► Needs_Action/ ─�
 | Requirement | Details |
 |-------------|---------|
 | **OS** | Linux, macOS, or WSL2 (Windows) |
-| **Python** | 3.6+ (standard library only — no pip installs needed) |
+| **Python** | 3.6+ (standard library for core; Playwright needed for WhatsApp) |
 | **Claude Code CLI** | Required for AI reasoning (`claude --print`) |
 | **Gmail** | Optional — for email watcher and sending. Requires App Password. |
+| **Playwright** | Optional — for WhatsApp watcher. `pip install playwright && playwright install chromium` |
 | **Obsidian** | Optional — for visual dashboard experience |
 
 ---
@@ -179,7 +180,7 @@ python3 -c "import gold_loop; import silver_loop; import action_logger; import e
 ### Step 4 — Run a test scan
 
 ```bash
-# Single scan with all watchers (no credentials needed for filesystem/WhatsApp)
+# Single scan with all watchers (WhatsApp requires Playwright setup first)
 python3 watcher_manager.py --once
 ```
 
@@ -244,46 +245,93 @@ python3 gmail_watcher.py --once
 
 ## WhatsApp Setup
 
-WhatsApp integration uses **exported chat files** — no API or third-party service needed.
+WhatsApp integration uses **Playwright** to connect to WhatsApp Web in a Chromium browser. It monitors unread chats, extracts messages, and creates structured task files automatically.
 
-### How to Export a WhatsApp Chat
-
-1. Open **WhatsApp** on your phone
-2. Open the chat you want to export
-3. Tap the **three-dot menu** (Android) or **contact name** (iOS)
-4. Select **Export Chat** > **Without Media**
-5. Send/save the `.txt` file to your computer
-6. Place it in `Inbox/whatsapp/` in the vault:
+### Prerequisites
 
 ```bash
-# Copy exported chat to the watch directory
-cp "WhatsApp Chat with John.txt" Inbox/whatsapp/
+# Install Playwright and download Chromium
+pip install playwright
+playwright install chromium
 ```
+
+### Step 1 — First-Time Login (QR Code)
+
+Run the setup command to open a headed browser and scan the QR code:
+
+```bash
+python3 whatsapp_watcher.py --setup
+```
+
+1. A Chromium window opens to `web.whatsapp.com`
+2. The QR code is displayed — scan it with your phone:
+   - Open WhatsApp on your phone
+   - Go to **Settings** > **Linked Devices** > **Link a Device**
+   - Point your phone camera at the QR code
+3. Wait for the chat list to load (confirms login)
+4. The session is saved to `~/.whatsapp_session` (persistent across runs)
+
+> **Note**: You have 2 minutes to scan the QR code before timeout. If already logged in, setup will confirm the session is valid and exit.
+
+### Step 2 — Configure (Optional)
+
+Add WhatsApp settings to `config.json`:
+
+```json
+{
+  "whatsapp": {
+    "session_path": "~/.whatsapp_session",
+    "headless": true,
+    "max_messages_per_task": 50
+  }
+}
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `session_path` | `~/.whatsapp_session` | Browser session storage directory |
+| `headless` | `true` | Run browser without visible window (set `false` for debugging) |
+| `max_messages_per_task` | `50` | Max messages to extract per chat |
 
 ### How It Works
 
-- `whatsapp_watcher.py` detects new `.txt` files in `Inbox/whatsapp/`
-- Parses the WhatsApp export format (supports multiple date formats)
+- `whatsapp_watcher.py` launches a persistent Chromium browser via Playwright
+- Navigates to WhatsApp Web and uses the saved session (no QR scan needed after setup)
+- Scans the chat list for **unread message badges**
+- For each unread chat: opens the conversation, extracts messages (sender, timestamp, text)
 - Creates a structured `TASK_WA_*.md` in `Needs_Action/` with:
   - Conversation preview (last 10 messages)
   - Primary contact identification
   - Priority detection (urgent keywords → high priority)
-- Registry-based deduplication prevents reprocessing the same file
+- SHA-256 hash deduplication via `.whatsapp_registry.json` prevents reprocessing the same messages
+- Browser is closed after each scan cycle
+
+### Running Modes
+
+```bash
+# Single scan — check for unread chats, create tasks, exit
+python3 whatsapp_watcher.py --once
+
+# Continuous polling — scans every 30 seconds (configurable)
+python3 whatsapp_watcher.py
+
+# First-time setup — headed browser for QR code login
+python3 whatsapp_watcher.py --setup
+```
 
 ### Test WhatsApp Watcher
 
 ```bash
-# Create a sample WhatsApp export
-cat > Inbox/whatsapp/test-chat.txt << 'EOF'
-[01/03/2026, 10:00:00] John: Hey, can you send me the project update?
-[01/03/2026, 10:05:00] You: Sure, I'll prepare it today.
-[01/03/2026, 10:06:00] John: Great, it's urgent. Client is asking.
-EOF
+# Ensure setup was completed first
+python3 whatsapp_watcher.py --setup
 
-# Run single scan
+# Run a single scan
 python3 whatsapp_watcher.py --once
 
-# Check if task was created
+# Check the log for results
+tail -20 watcher.log
+
+# Check if tasks were created from unread chats
 ls Needs_Action/TASK_WA_*
 ```
 
@@ -940,7 +988,7 @@ A LinkedIn post draft ready for review.
 - Confirm watcher is running: check `watcher.log`
 - Files must be in the correct directory:
   - General files → `Inbox/`
-  - WhatsApp exports → `Inbox/whatsapp/`
+  - WhatsApp: uses Playwright (auto-scans unread chats — no file drop needed)
 - Hidden files (starting with `.`) are ignored
 - Wait at least the poll interval (default 30 seconds)
 
@@ -952,10 +1000,14 @@ A LinkedIn post draft ready for review.
 - Check if "Less secure apps" is NOT what you need — use App Password instead
 
 ### WhatsApp watcher not creating tasks
-- File must be `.txt` format (not .pdf, .zip, etc.)
-- File must be in `Inbox/whatsapp/` (not `Inbox/`)
-- Check if file was already processed: look in `.whatsapp_registry.json`
-- To reprocess: delete the file's hash from `.whatsapp_registry.json`
+- Ensure Playwright is installed: `pip install playwright && playwright install chromium`
+- Run setup first: `python3 whatsapp_watcher.py --setup` (QR code login required once)
+- Check if session is valid: session is stored in `~/.whatsapp_session` (or path from config.json)
+- If session expired, re-run `--setup` to scan QR code again
+- Check if messages were already processed: look in `.whatsapp_registry.json`
+- To reprocess: delete message hashes from `.whatsapp_registry.json`
+- Verify there are unread chats in WhatsApp (the watcher only picks up unread conversations)
+- For debugging, set `"headless": false` in config.json whatsapp section to see the browser
 
 ### Approval is stuck
 - Check `Pending_Approval/` for pending approval files
@@ -1081,7 +1133,7 @@ cat .gold_retry_state.json        # retry state
 
 # ── Drop Inputs ──
 cp my-file.md Inbox/              # filesystem watcher picks up
-cp "WhatsApp Chat.txt" Inbox/whatsapp/  # WhatsApp watcher picks up
+# WhatsApp (Playwright — auto-detects unread chats, no manual drop needed)
 
 # ── Create Task Directly ──
 cat > Needs_Action/my-task.md << 'EOF'
